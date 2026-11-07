@@ -1,7 +1,8 @@
 module.exports =
   pkg:
     name: 'pie', version: '0.0.1'
-    extend: {name: "@makechart/base"}
+    # lite: 不帶 d3 的 base. 補間改用 chart.anim, 可以逐格錄影 ( 見 @plotdb/chart utils/anim )
+    extend: {name: "@makechart/base", path: "lite/index.html"}
     dependencies: []
     i18n:
       "zh-TW":
@@ -13,7 +14,9 @@ module.exports =
     pubsub.fire \init, mod: mod {context, t}
 
 mod = ({context, t}) ->
-  {chart,d3} = context
+  {chart} = context
+  {format, shape, anim: {join}} = chart.utils
+  svgns = "http://www.w3.org/2000/svg"
   sample: ->
     raw: [1 to 30].map (val) ~>
       {
@@ -40,14 +43,15 @@ mod = ({context, t}) ->
     value: {type: \R, name: "value", priority: 20}
     category: {type: \C, name: "category", priority: 25, multiple: true}
   init: ->
-    @g = Object.fromEntries <[view legend]>.map ~> [it, d3.select(@layout.get-group it).append \g]
+    @g = Object.fromEntries <[view legend]>.map ~>
+      [it, @layout.get-group(it).appendChild(document.createElementNS svgns, \g)]
     @tint = tint = new chart.utils.tint!
     @tip = new chart.utils.tip {
       root: @root
       accessor: ({evt}) ~>
-        if !(evt.target and d = d3.select(evt.target).datum!) => return null
+        if !(evt.target and d = evt.target.__data__) => return null
         v = if isNaN(d.value) => '-'
-        else "#{d3.format(@cfg.tip.format or '.2s')(d.value)}#{@binding.value.unit or ''}"
+        else "#{format.from(@cfg.tip.format or '.2s')(d.value)}#{@binding.value.unit or ''}"
         return {name: d.name or (if d.category => d.category[* - 1] else '-'), value: v}
       range: ~> @layout.get-node \view .getBoundingClientRect!
     }
@@ -55,7 +59,7 @@ mod = ({context, t}) ->
       layout: @layout
       name: 'legend'
       root: @root
-      shape: (d) -> d3.select(@).attr \fill, tint.get d.text
+      shape: (d) -> @setAttribute \fill, tint.get d.text
       cfg: selectable: true
     @legend.on \select, ~>
       # legend.crossfilter 打開時, legend 與 wedge 點選共用同一份選取 -
@@ -63,7 +67,7 @@ mod = ({context, t}) ->
       if (@cfg.legend or {}).crossfilter =>
         return @local.legend-to-filter!
       @parse!; @bind!; @resize!; @render!
-    @arc = d3.arc!
+    @arc = shape.arc!
       .startAngle 0
       .endAngle(Math.PI / 2)
     @total = {}
@@ -220,66 +224,69 @@ mod = ({context, t}) ->
 
     if @cfg? and @cfg.palette => @tint.set(@cfg.palette.colors.map -> it.value or it)
     box = @layout.get-box \view
-    @g.view.attr \transform, "translate(#{box.width / 2},#{box.height / 2})"
+    @g.view.setAttribute \transform, "translate(#{box.width / 2},#{box.height / 2})"
 
-    @g.view.selectAll \g.ring .data @all
-      ..exit!remove!
-      ..enter!append \g .attr \class, \ring
+    tween = (n, attrs) ~> @anim.tween n, attrs, {duration: 350}
+    drop = (n) ~>
+      @anim.interrupt n
+      n.remove!
+    color-of = (d) -> tint.get(d.color-key or d._idx)
+    opacity-of = (d) ->
+      # partial 時灰階本身已經表示未選中, 不再降透明
+      op = if d.legend-dim => legend.opacity!
+      else if partial => 1
+      else picked-of d
+      if !(h = hover.item) => return op
+      if h.category =>
+        for j from 0 til h.category.length =>
+          if d.category[j] != h.category[j] => return op * 0.3
+          if j == d.category.length - 1 => break
+        if d._lv == h._lv and d != h => return op * 0.3
+        return op
+      else if hover.item.name == d.name => op else op * 0.3
+    key = (d) -> d.name or d._idx
 
-    @g.view.selectAll \g.ring
-      .each (d,j) ->
-        n = d3.select(@)
-        n.selectAll \path.data .data(d, -> it.name or it._idx)
-          ..exit!remove!
-          ..enter!append \path .attr \class, \data
-            .on \mouseover, (e,n,i) ~>
-              hover.item = n
-              render!
-            .on \mouseout, (e,n,i) ~>
-              hover.item = null
-              render!
-            .on \click, (e,n,i) ->
-              # mod 自己的工具方法放在 mod.local, 核心建構時綁到實例上
-              self.local.toggle-select e, n
-            .attr \opacity, (d,i) ~> 0
-            .attr \fill, (d,i) ~> tint.get(d.color-key or d._idx)
-        n.selectAll \path.data
-          .transition!duration 350
-          .attrTween \d, (d,i) ->
-            interpolate-arc d.old, d.cur, j
-          .attr \fill, (d,i) ~>
-            c = tint.get(d.color-key or d._idx)
-            # legend 關掉的只降透明 ( 保留顏色才認得出是哪一項 ); 灰化是 partial 的手法
-            if partial and !d.legend-dim => self.subset.color(c) else c
-          .attr \opacity, (d,i) ~>
-            # partial 時灰階本身已經表示未選中, 不再降透明
-            op = if d.legend-dim => legend.opacity!
-            else if partial => 1
-            else picked-of d
-            if !(h = hover.item) => return op
-            if h.category =>
-              for j from 0 til h.category.length =>
-                if d.category[j] != h.category[j] => return op * 0.3
-                if j == d.category.length - 1 => break
-              if d._lv == h._lv and d != h => return op * 0.3
-              return op
-            else if hover.item.name == d.name => op else op * 0.3
+    rj = join root: @g.view, tag: \g, cls: \ring, data: @all
+    rj.exit.map drop
+    rj.nodes.map (ring, j) ->
+      d = ring.__data__
+      pj = join root: ring, tag: \path, cls: \data, data: d, key: key
+      pj.exit.map drop
+      pj.enter.map (n) ->
+        n.addEventListener \mouseover, ->
+          hover.item = n.__data__
+          render!
+        n.addEventListener \mouseout, ->
+          hover.item = null
+          render!
+        # mod 自己的工具方法放在 mod.local, 核心建構時綁到實例上
+        n.addEventListener \click, (e) -> self.local.toggle-select e, n.__data__
+        n.setAttribute \opacity, 0
+        n.setAttribute \fill, color-of(n.__data__)
+      pj.nodes.map (n) ->
+        d = n.__data__
+        c = color-of d
+        tween n, do
+          d: interpolate-arc d.old, d.cur, j
+          # legend 關掉的只降透明 ( 保留顏色才認得出是哪一項 ); 灰化是 partial 的手法
+          fill: if partial and !d.legend-dim => self.subset.color(c) else c
+          opacity: opacity-of d
 
-        if !partial => n.selectAll \path.subset .remove!
-        else
-          n.selectAll \path.subset .data((d.filter -> !it.legend-dim), -> it.name or it._idx)
-            ..exit!remove!
-            ..enter!append \path .attr \class, \subset
-              # 蓋在上面但不吃事件, 點擊 / hover 一律由底下那片 wedge 處理
-              .style \pointer-events, \none
-              .attr \opacity, 0
-          n.selectAll \path.subset
-            .transition!duration 350
-            .attrTween \d, (d,i) -> interpolate-arc d.old, d.cur, j, \es
-            .attr \fill, (d,i) ~> tint.get(d.color-key or d._idx)
-            .attr \opacity, 1
+      subs = if !partial => [] else d.filter -> !it.legend-dim
+      sj = join root: ring, tag: \path, cls: \subset, data: subs, key: key
+      sj.exit.map drop
+      sj.enter.map (n) ->
+        # 蓋在上面但不吃事件, 點擊 / hover 一律由底下那片 wedge 處理
+        n.style.pointerEvents = \none
+        n.setAttribute \opacity, 0
+      sj.nodes.map (n) ->
+        d = n.__data__
+        tween n, do
+          d: interpolate-arc d.old, d.cur, j, \es
+          fill: color-of d
+          opacity: 1
 
-        legend.render!
+    legend.render!
 
   # 這張圖自己的工具方法. `local` 是核心保留給圖表的位置, 核心不管裡面有什麼,
   # 建構時會綁到實例上, 所以呼叫端寫 `@local.xxx()` 就好
