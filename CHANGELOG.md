@@ -1,5 +1,18 @@
 # Change Logs
 
+## v0.0.4
+
+ - fix bug: with `category` bound, clicking a category wedge, or a legend item with `legend.crossfilter`
+   ( legend items are the first category level ), wrote the category label into the `name` filter. a host
+   matches `name` against the data point column, so nothing matched ( e.g. a dashboard went empty, with no
+   error ). they now filter the `name` of every data point under that category; a category wedge shows
+   as picked when any data point under it is picked
+ - declare `interactions` ( needs `@plotdb/chart` >= 3.16.0 ): clicking a wedge filters `name`; the legend
+   filters `name` too, only with `legend.crossfilter` ( otherwise it just shows / hides items )
+ - add `interactions:*`, `click:category*` and `legend:crossfilter-category` test cases
+ - devDependencies: `@makechart/viewer` ^0.0.7, and refresh the lock so its `@plotdb/chart` is 3.16.0
+
+
 ## v0.0.3
 
  - extend the lite base ( `@makechart/base` `lite/index.html`, no d3 ): needs `@makechart/base` >= 0.2.0

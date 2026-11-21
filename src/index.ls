@@ -81,6 +81,10 @@ mod = ({context, t}) ->
     if !((@cfg.legend or {}).crossfilter) => return
     @local.filter-to-legend!
 
+  # 點 wedge 一律發 filter; 點圖例只有 legend.crossfilter 時才發 ( 否則只是顯示 / 隱藏 ). 兩者都寫 name
+  interactions: ->
+    if (@cfg.legend or {}).crossfilter => {click: <[name]>, legend: <[name]>} else {click: <[name]>}
+
 
   parse: ->
     @tint.reset!
@@ -163,8 +167,8 @@ mod = ({context, t}) ->
       f = ((binding.name or {}).filter or {}).value
       # f 是 [] 表示「什麼都沒選」, 跟「沒有篩選」不一樣, 所以這裡只看存不存在
       if !f => return 1
-      key = d.name or (if d.category => d.category[* - 1] else null)
-      if key in f => 1 else dimmed
+      # 類別 wedge: 底下有任一個資料點被選中就算選中, 選中的那一路從內圈亮到外圈
+      if self.local.names-of(d).some(-> it in f) => 1 else dimmed
     box = @layout.get-box \view
     [w,h] = [box.width, box.height]
     size = Math.min(w,h)
@@ -293,25 +297,42 @@ mod = ({context, t}) ->
   local:
 
     # filter -> legend: 讓 legend 的勾選跟著外面的篩選狀態走
+    # filter 一律寫 name ( host 拿它對資料點那一欄 ). 類別 wedge 和圖例 ( key 是第一層類別 ) 都換成
+    # 底下資料點的 name - 直接寫類別名稱的話, host 會拿類別的值去篩 name 那一欄, 什麼都篩不到
+    names-of: (d) ->
+      leaves = @all[* - 1] or []
+      if !d.category or d._lv == @all.length - 1 => return if d.name? => [d.name] else []
+      cat = d.category
+      leaves
+        .filter (n) -> [0 til cat.length].every (i) -> n.category[i] == cat[i]
+        .map (.name)
+        .filter (-> it?)
+
+    # filter -> legend: 讓 legend 的勾選跟著外面的篩選狀態走. 底下有資料點被選中的那一項就勾起來
     filter-to-legend: ->
       vs = ((@binding.name or {}).filter or {}).value
-      @legend.select (if vs? => vs else null)
+      if !vs? => return @legend.select null
+      leaves = (@all[* - 1] or []).filter -> it.name in vs
+      @legend.select Array.from(new Set(leaves.map (.color-key)))
 
     # legend -> filter: legend 的勾選就是 filter 的值列表.
     # 全選 ( selected! 回 null ) = 沒有篩選; 全不選 ( 回 [] ) = 篩選出空集合, 兩者不同 -
     # 混為一談的話「全不選」按下去會彈回全選
     legend-to-filter: ->
-      vs = @legend.selected!
+      ks = @legend.selected!
+      vs = if !ks? => null
+      else (@all[* - 1] or []).filter(-> it.color-key in ks).map((.name)).filter (-> it?)
       @filter {name: (if vs? => {type: \index, value: vs} else undefined)}, true
 
     # wedge 的選取: 單擊只選這一個, shift 增刪, 再點一次選到只剩自己的那個就清空.
+    # 類別 wedge 選的是它底下所有資料點 ( 見 names-of ).
     # 走 chart.filter 這條既有的路 ( 跟 bar 的 brush 一樣 ), 所以 host 收到的是同一種 filter 事件.
     toggle-select: (evt, d) ->
-      key = d.name or (if d.category => d.category[* - 1] else null)
-      if !key? => return
+      ks = @local.names-of d
+      if !ks.length => return
       vs = (((@binding.name or {}).filter or {}).value or []).slice!
       vs = if evt and evt.shiftKey =>
-        if key in vs => vs.filter (-> it != key) else vs ++ [key]
-      else if vs.length == 1 and vs.0 == key => []
-      else [key]
+        if ks.every(-> it in vs) => vs.filter (-> !(it in ks)) else vs ++ ks.filter(-> !(it in vs))
+      else if vs.length == ks.length and ks.every(-> it in vs) => []
+      else ks
       @filter {name: (if vs.length => {type: \index, value: vs} else undefined)}, true

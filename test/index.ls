@@ -16,6 +16,21 @@ with-subset = (d) ->
   r = mctest.random 99
   d.subset = d.raw.map -> {} <<< it <<< {val: Math.round(it.val * r!)}
   d
+# chart.interactions! ( 哪個操作會發哪幾維的 filter ) 要等於 want
+interactions-is = (want) -> (c) ->
+  got = JSON.stringify c.interactions!
+  if got != JSON.stringify(want) => throw new Error("interactions: #got, 應為 #{JSON.stringify want}")
+# name 的 filter 值 ( 排序後比較 ) 要等於 want(c); want 回 null 表示沒有篩選
+name-filter-is = (want) -> (c) ->
+  got = ((c.binding.name or {}).filter or {}).value
+  got = if got? => got.slice!sort! else null
+  w = want c
+  w = if w? => w.slice!sort! else null
+  if JSON.stringify(got) != JSON.stringify(w) => throw new Error("name filter: #{JSON.stringify got}, 應為 #{JSON.stringify w}")
+# 第 lv 圈第 i 個類別底下所有資料點的 name
+under = (c, lv, i) ->
+  cat = c.all[lv][i].category
+  c.all[* - 1].filter((n) -> [0 til cat.length].every (k) -> n.category[k] == cat[k]).map (.name)
 click = (sel, opt = {}) -> (c, ctx) ->
   n = ctx.root.querySelectorAll(sel)[opt.idx or 0]
   n.dispatchEvent new MouseEvent(\click, {bubbles: true, shift-key: !!opt.shift})
@@ -39,6 +54,20 @@ mctest.suite do
       steps:
         * click 'path.data', idx: 2
         * click 'path.data', idx: 4, shift: true
+    # 類別 wedge 與圖例 ( key 是第一層類別 ) 篩的是底下資料點的 name, 不是類別名稱
+    * name: "click:category", data: \lv2
+      steps:
+        * click '.ring:first-child path.data', idx: 1
+        * name-filter-is (c) -> under c, 0, 1
+    * name: "click:category-twice", data: \lv2
+      steps:
+        * click '.ring:first-child path.data', idx: 1
+        * click '.ring:first-child path.data', idx: 1
+        * name-filter-is -> null
+    * name: "legend:crossfilter-category", data: \lv1, config: {legend: {crossfilter: true}}
+      steps:
+        * (c) -> c.legend.select [c.all.0.1.color-key]; c.local.legend-to-filter!
+        * name-filter-is (c) -> under c, 0, 1
     * name: "hover", data: \lv2
       steps: (c, ctx) ->
         ctx.root.querySelectorAll('path.data')[3].dispatchEvent new MouseEvent(\mouseover, {bubbles: true})
@@ -54,6 +83,10 @@ mctest.suite do
   size: [480, 360]
   data: {flat: flat 6}
   cases:
+    # 點 wedge 一律篩 name; 圖例只有 crossfilter 時才篩, 也是 name
+    * name: "interactions:default", data: \flat, steps: [interactions-is {click: <[name]>}]
+    * name: "interactions:crossfilter", data: \flat, config: {legend: {crossfilter: true}}
+      steps: [interactions-is {click: <[name]>, legend: <[name]>}]
     * name: "anim:update-frames", data: \flat
       steps: (c, ctx) ->
         d = flat 4, 7
