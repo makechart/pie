@@ -38,6 +38,9 @@ mod = ({context, t}) ->
     donut:
       percent: type: \number, default: 0.7, min: 0, max: 1, step: 0.01, desc: {en: "size of the hole in the middle, as a share of the radius ( 0 to 1 ); 0 makes a full pie", "zh-TW": "中間空心的大小，佔半徑的比例 ( 0 到 1 )；0 為實心圓餅"}
       padding: type: \number, default: 0.03, min: 0, max: 1, step: 0.01, desc: {en: "share of the ring band left as gaps between the nested category rings ( 0 to 1 ); larger also widens the gaps between wedges", "zh-TW": "多層分類圓環之間的空隙，佔環帶寬度的比例 ( 0 到 1 )；越大扇形之間的縫也越寬"}
+  # 段落 ( tab ) 的說明, key 是段落的路徑. preset 的段落由 chart.utils.config.tabinfo 掛上來, 共用的 common 由核心補
+  tabinfo: chart.utils.config.tabinfo({tip: \tip, legend: \legend}) <<<
+    donut: desc: {en: "the hole in the middle and the gaps between the category rings", "zh-TW": "中間的空心，以及各層分類圓環之間的空隙"}
   dimension:
     name: {type: \NCO, name: "name", priority: 10}
     value: {type: \R, name: "value", priority: 20}
