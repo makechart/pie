@@ -1,5 +1,9 @@
 # Change Logs
 
+## v0.0.5
+
+ - add `desc` ( en / zh-TW ) to the config items, shown under the label in the makechart style panel
+
 ## v0.0.4
 
  - fix bug: with `category` bound, clicking a category wedge, or a legend item with `legend.crossfilter`
