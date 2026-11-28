@@ -1,5 +1,11 @@
 # Change Logs
 
+## v0.0.7
+
+ - pass the whole palette to tint ( it kept only the color values and dropped `tag` ), so a palette `tag` pins a data value to its color
+ - add test case `palette:tag`
+
+
 ## v0.0.6
 
  - add `tabinfo`: descriptions ( en / zh-TW ) of the config sections, shown on the section tabs in the makechart style panel ( needs @plotdb/chart >= 3.17.0 )

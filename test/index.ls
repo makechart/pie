@@ -48,6 +48,16 @@ mctest.suite do
     * name: "lv2", data: \lv2
     * name: "donut:0.3", data: \flat, config: {donut: {percent: 0.3, padding: 0.1}}
     * name: "legend:bottom", data: \flat, config: {legend: {position: \bottom}}
+    # 色盤的 tag 指定資料的顏色 ( 原本只取色碼, tag 被丟掉 )
+    * name: "palette:tag", data: \flat
+      config: palette: colors: [{value: \#111111, tag: ["Item 3"]}, \#e15c64, \#f7b26a, \#a0d7d2, \#8db1da, \#daaedb]
+      steps:
+        * (c, ctx) -> ctx.wait 450
+        * (c, ctx) ->
+            dark = -> "#it".replace(/\s/g, '') in <[#111111 rgb(17,17,17)]>
+            fills = Array.from(ctx.root.querySelectorAll 'path.data').map -> it.getAttribute \fill
+            if !dark(c.tint.get "Item 3") => throw new Error("Item 3: #{c.tint.get 'Item 3'}, 應為 #111111")
+            if !fills.some(dark) => throw new Error("no wedge is #111111: #{fills.join ', '}")
     * name: "partial", data: \subset, config: {common: {subset: {mode: \partial}}}
     * name: "picked", data: \flat, steps: (c) -> c.filter {name: {type: \index, value: <["Item 1" "Item 3"]>}}
     * name: "click", data: \flat

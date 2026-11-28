@@ -229,7 +229,8 @@ mod = ({context, t}) ->
       @arc.startAngle s .endAngle e
       @arc!
 
-    if @cfg? and @cfg.palette => @tint.set(@cfg.palette.colors.map -> it.value or it)
+    # 整個色盤交給 tint ( 不只色碼 ), 色盤的 tag 才能指定類別的顏色
+    if @cfg? and @cfg.palette => @tint.set @cfg.palette
     box = @layout.get-box \view
     @g.view.setAttribute \transform, "translate(#{box.width / 2},#{box.height / 2})"
 
